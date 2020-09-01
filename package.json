@@ -1,0 +1,17 @@
+{
+  "name": "umbra",
+  "version": "0.0.1",
+  "description": "Implementation of Stratego using ReScript",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "bsb -make-world",
+    "clean": "bsb -clean-world",
+    "start": "bsb -make-world -w"
+  },
+  "author": "Samuel Ferrell <samcferrell@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "bs-platform": "^8.2.0"
+  }
+}
