@@ -1,10 +1,15 @@
 module Umbra = {
   open Belt
 
+  type direction =
+    | N
+    | E
+    | S
+    | W
+
   type side =
-    | Red
     | Blue
-    | None
+    | Red
 
   type kind =
     | Bomb
@@ -64,10 +69,69 @@ module Umbra = {
     | _ => rank(a) > rank(b)
     }
 
-  let flatMap = (xs, f) => Array.reduce(xs, [], (r, x) => Array.concat(r, f(x)))
   let kinds = [Bomb, Mars, Genr, Crnl, Majr, Capt, Lieu, Serg, Mine, Scot, Spys, Flag]
-  let sides = [Red, Blue]
-  let every = flatMap(sides, s => flatMap(kinds, k => Array.make(quantity(k), Army(s, k))))
+  let flatMap = (xs, f) => Array.reduce(xs, [], (r, x) => Array.concat(r, f(x)))
+  let newSet = s => flatMap(kinds, k => Array.make(quantity(k), Army(s, k)))
+  let coords = i => (mod(i, 10), i / 10)
+  let index = ((x, y)) => y * 10 + x
 
-  Js.log(every)
+  let newBoard = _ => {
+    let lts = [Land, Land, None, None, Land, Land, None, None, Land, Land]
+    let bts = Array.shuffle(newSet(Blue))
+    let rts = Array.shuffle(newSet(Red))
+    Array.concatMany([bts, lts, lts, rts])
+  }
+
+  let path = (index, kind, dir) =>
+    switch (coords(index), kind, dir) {
+    | ((_, 0), _, N) => []
+    | ((9, _), _, E) => []
+    | ((_, 9), _, S) => []
+    | ((0, _), _, W) => []
+    | ((_, y), Scot, N) => Array.map(Array.range(1, y), x => index - x * 10)
+    | ((x, _), Scot, E) => Array.map(Array.range(1, x - 1), x => index + x)
+    | ((_, y), Scot, S) => Array.map(Array.range(1, 9 - y), x => index + x * 10)
+    | ((x, _), Scot, W) => Array.map(Array.range(1, x), x => index - x)
+    | (_, _, N) => [index - 10]
+    | (_, _, E) => [index + 1]
+    | (_, _, S) => [index + 10]
+    | (_, _, W) => [index - 1]
+    }
+
+  let walk = (a, b) =>
+    switch (a, b) {
+    | (Army(h, _), Army(k, _)) => (h !== k, false)
+    | (Army(_, _), Land) => (true, true)
+    | (_, _) => (false, false)
+    }
+
+  let moves = (board, index) =>
+    switch board[index] {
+    | Some(Army(_, Bomb)) => []
+    | Some(Army(_, Flag)) => []
+    | Some(Army(side, kind)) => {
+        let dirs = [N, E, S, W]
+        let initial = ([], true)
+        flatMap(dirs, dir => {
+          let candidates = path(index, kind, dir)
+          let (valid, _) = Array.reduce(candidates, initial, ((result, continue), index) => {
+            if continue {
+              switch board[index] {
+              | Some(tile) =>
+                switch walk(Army(side, kind), tile) {
+                | (true, cont) => (Array.concat(result, [index]), cont)
+                | (false, _) => (result, false)
+                }
+              | None => (result, false)
+              }
+            } else {
+              (result, continue)
+            }
+          })
+
+          valid
+        })
+      }
+    | _ => []
+    }
 }
