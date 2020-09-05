@@ -30,6 +30,26 @@ module Umbra = {
     | Land
     | None
 
+  // Returns the results of `f` applied to each member of `xs` concatenated
+  // together.
+  let flatMap = (xs, f) => {
+    Array.reduce(xs, [], (r, x) => Array.concat(r, f(x)))
+  }
+
+  // Returns the index in the board array represented by the given coordinates.
+  let index = ((x, y)) => {
+    y * 10 + x
+  }
+
+  // Returns a two-element tuple of (x, y) that represent the cartesian
+  // coordinates of the given board index. The top-left most tile in the board
+  // is represented by (0, 0).
+  let coords = i => {
+    (mod(i, 10), i / 10)
+  }
+
+  // Returns the number of pieces of the given kind that each player can
+  // distribute on the board during setup.
   let quantity = k =>
     switch k {
     | Bomb => 6
@@ -46,6 +66,8 @@ module Umbra = {
     | Flag => 1
     }
 
+  // Returns the rank of the given kind as an integer. The rank represents the
+  // attack rank of the piece, determining the result of an attack.
   let rank = k =>
     switch k {
     | Bomb => 11
@@ -62,26 +84,22 @@ module Umbra = {
     | Flag => 0
     }
 
+  // Returns the result of an attack, a two-element tuple of booleans. The
+  // first boolean represents whether or not the attacking piece will be
+  // captured as a result of the attack; the second whether the defending
+  // piece will be captured.
   let captures = (a, b) =>
     switch (a, b) {
-    | (Mine, Bomb) => true
-    | (Spys, Mars) => true
-    | _ => rank(a) > rank(b)
+    | (Mine, Bomb) => (false, true)
+    | (Spys, Mars) => (false, true)
+    | (_, Bomb) => (true, false)
+    | (h, k) when h == k => (true, true)
+    | (_, _) => (false, rank(a) > rank(b))
     }
 
-  let kinds = [Bomb, Mars, Genr, Crnl, Majr, Capt, Lieu, Serg, Mine, Scot, Spys, Flag]
-  let flatMap = (xs, f) => Array.reduce(xs, [], (r, x) => Array.concat(r, f(x)))
-  let newSet = s => flatMap(kinds, k => Array.make(quantity(k), Army(s, k)))
-  let coords = i => (mod(i, 10), i / 10)
-  let index = ((x, y)) => y * 10 + x
-
-  let newBoard = _ => {
-    let lts = [Land, Land, None, None, Land, Land, None, None, Land, Land]
-    let bts = Array.shuffle(newSet(Blue))
-    let rts = Array.shuffle(newSet(Red))
-    Array.concatMany([bts, lts, lts, rts])
-  }
-
+  // Returns the set of board indices that the tile given by the index can
+  // move to in the given direction. This only considers board boundaries
+  // and not the tile contents themselves.
   let path = (index, kind, dir) =>
     switch (coords(index), kind, dir) {
     | ((_, 0), _, N) => []
@@ -98,6 +116,11 @@ module Umbra = {
     | (_, _, W) => [index - 1]
     }
 
+  // Returns the result of moving the tile `a` to the tile `b` as a two-element
+  // tuple of booleans. The first boolean is true if the moving tile `a` can
+  // legally move into the space occupied by `b`. The second boolean is true
+  // if the piece can continue moving in that direction or if it should stop
+  // there altogether.
   let walk = (a, b) =>
     switch (a, b) {
     | (Army(h, _), Army(k, _)) => (h !== k, false)
@@ -105,6 +128,9 @@ module Umbra = {
     | (_, _) => (false, false)
     }
 
+  // Returns the set of all legal positions in the board that the tile found
+  // at the given index can perform. The returned positions are represented
+  // by the board index.
   let moves = (board, index) =>
     switch board[index] {
     | Some(Army(_, Bomb)) => []
@@ -134,4 +160,17 @@ module Umbra = {
       }
     | _ => []
     }
+
+  let newSet = s => {
+    let kinds = [Bomb, Mars, Genr, Crnl, Majr, Capt, Lieu, Serg, Mine, Scot, Spys, Flag]
+    flatMap(kinds, k => Array.make(quantity(k), Army(s, k)))
+  }
+
+  // Returns a new board with random piece positions.
+  let newBoard = _ => {
+    let lts = [Land, Land, None, None, Land, Land, None, None, Land, Land]
+    let bts = Array.shuffle(newSet(Blue))
+    let rts = Array.shuffle(newSet(Red))
+    Array.concatMany([bts, lts, lts, rts])
+  }
 }
