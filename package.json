@@ -3,8 +3,10 @@
   "version": "0.0.1",
   "description": "Implementation of Stratego using ReScript",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "bundle": "rollup -c",
     "build": "bsb -make-world",
     "clean": "bsb -clean-world",
     "start": "bsb -make-world -w"
@@ -12,6 +14,8 @@
   "author": "Samuel Ferrell <samcferrell@gmail.com>",
   "license": "MIT",
   "devDependencies": {
-    "bs-platform": "^8.2.0"
+    "@rollup/plugin-node-resolve": "^9.0.0",
+    "bs-platform": "^8.2.0",
+    "rollup": "^2.26.10"
   }
 }
