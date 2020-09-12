@@ -1,0 +1,30 @@
+body {
+    line-height: 1.6;
+    font-size: 16px;
+    padding: 32px;
+    font-family: "Merriweather", serif;
+    font-display: block;
+}
+
+button {
+    background: none;
+    outline: none;
+    border: 1px solid #aaa;
+    border-radius: 2px;
+    padding: 4px 8px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.title {
+    font-size: 18px;
+}
+
+.controls button {
+    min-width: 300px;
+    display: block;
+}
+
+.controls button + button {
+    margin-top: 4px;
+}

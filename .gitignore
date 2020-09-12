@@ -3,3 +3,4 @@ lib/bs
 *.lock
 *.bs.js
 *.merlin
+docs/umbra.js
