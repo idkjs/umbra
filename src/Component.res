@@ -1,3 +1,13 @@
+open Belt
+
+let css = ts => Array.reduce(ts, "", (names, (name, pass)) =>
+    switch (pass, names) {
+    | (true, "") => name
+    | (true, names) => Js.String.concatMany([" ", name], names)
+    | (false, names) => names
+    }
+  )
+
 let navigate = (path, _) => ReasonReactRouter.push("#" ++ path)
 
 module Link = {
@@ -19,10 +29,66 @@ module Layout = {
 module Home = {
   @react.component
   let make = () => {
+    let (selected, setSelected) = React.useState(_ => None)
     let (state, dispatch) = Context.use()
-    dispatch(Foo)
-    Js.log(state)
-    <div className="controls"> <button> {React.string("Start new game")} </button> </div>
+
+    switch state {
+    | Invalid => <div> {React.string("Invalid state")} </div>
+
+    | NotStarted =>
+      <div className="controls">
+        <button onClick={_ => dispatch(StartNew)}> {React.string("Start new game")} </button>
+      </div>
+
+    | Setup({tiles, side, yours}) => {
+        let board = Array.mapWithIndex(tiles, (index, tile) => {
+          let coords = State.coords(index)
+          let allowed = State.validStart(side, coords)
+          <div
+            className={css([("allowed", selected !== None && allowed)])}
+            onClick={_ =>
+              switch (allowed, selected) {
+              | (false, _) => ()
+              | (true, None) => ()
+              | (true, Some(kind)) =>
+                setSelected(_ => None)
+                dispatch(Set(kind, coords))
+              }}>
+            {switch tile {
+            | Land => React.string(" ")
+            | None => React.string("~")
+            | _ => React.string("T")
+            }}
+          </div>
+        })
+
+        let pieces = yours->List.toArray->Array.map(kind =>
+          <div onClick={_ => setSelected(_ => Some(kind))}>
+            {React.string(
+              switch kind {
+              | Bomb => "Bomb"
+              | Mars => "Mars"
+              | Genr => "Genr"
+              | Crnl => "Crnl"
+              | Majr => "Majr"
+              | Capt => "Capt"
+              | Lieu => "Lieu"
+              | Serg => "Serg"
+              | Mine => "Mine"
+              | Scot => "Scot"
+              | Spys => "Spys"
+              | Flag => "Flag"
+              },
+            )}
+          </div>
+        )
+
+        <div>
+          <div className="board"> {React.array(board)} </div>
+          <div className="pieces"> {React.array(pieces)} </div>
+        </div>
+      }
+    }
   }
 }
 
@@ -45,14 +111,7 @@ module Router = {
 }
 
 module Root = {
-  let reducer = (state, event) => {
-    switch (event: Type.event) {
-    | Foo => state
-    | Bar => state
-    }
-  }
-
-  let thunk = (dispatch, event: Type.event) => {
+  let thunk = (dispatch, event: State.event) => {
     switch event {
     | event => dispatch(event)
     }
@@ -60,7 +119,7 @@ module Root = {
 
   @react.component
   let make = () => {
-    let (state, dispatch) = React.useReducer(reducer, ({test: "Hello, world!"}: Type.state))
+    let (state, dispatch) = React.useReducer(State.resolve, State.NotStarted)
     <Context.Provider value={(state, thunk(dispatch))}>
       <Layout> <Router /> </Layout>
     </Context.Provider>

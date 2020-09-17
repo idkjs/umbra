@@ -1,6 +1,5 @@
-let state: Type.state = {test: "Hello, world!"}
-let dispatch = (_: Type.event) => ()
-let context = React.createContext((state, dispatch))
+let dispatch = (_: State.event) => ()
+let context = React.createContext((State.NotStarted, dispatch))
 let use = _ => React.useContext(context)
 
 module Provider = {

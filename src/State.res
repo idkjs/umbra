@@ -1,9 +1,5 @@
 open Belt
 
-let flatMap = (xs, f) => {
-  Array.reduce(xs, [], (r, x) => Array.concat(r, f(x)))
-}
-
 type direction =
   | N
   | E
@@ -33,26 +29,40 @@ type tile =
   | Land
   | Army(side, kind)
 
-type mode =
-  | Pending
-  | Setup
-  | Play
-  | Over
+let assoc = (xs, k, v) => {
+  let c = Array.copy(xs)
+  Array.setUnsafe(c, k, v)
+  c
+}
 
-// Returns the index in the board array represented by the given coordinates.
+let rec remove = (xs, x) =>
+  switch xs {
+  | list{} => xs
+  | list{hd, ...tl} => hd === x ? tl : list{hd, ...remove(tl, x)}
+  }
+
+let repeat = (x, t) => {
+  let rec recur = (xs, x, t) => {
+    t == 1 ? list{x, ...xs} : recur(list{x, ...xs}, x, t - 1)
+  }
+
+  recur(list{}, x, t)
+}
+
+let rec conj = (xs, ys) =>
+  switch ys {
+  | list{} => xs
+  | list{hd, ...tl} => conj(list{hd, ...xs}, tl)
+  }
+
 let index = ((x, y)) => {
   y * 10 + x
 }
 
-// Returns a two-element tuple of (x, y) that represent the cartesian
-// coordinates of the given board index. The top-left most tile in the board
-// is represented by (0, 0).
 let coords = i => {
   (mod(i, 10), i / 10)
 }
 
-// Returns the number of pieces of the given kind that each player can
-// distribute on the board during setup.
 let quantity = k =>
   switch k {
   | Bomb => 6
@@ -69,8 +79,6 @@ let quantity = k =>
   | Flag => 1
   }
 
-// Returns the rank of the given kind as an integer. The rank represents the
-// attack rank of the piece, determining the result of an attack.
 let rank = k =>
   switch k {
   | Bomb => 11
@@ -87,10 +95,6 @@ let rank = k =>
   | Flag => 0
   }
 
-// Returns the result of an attack, a two-element tuple of booleans. The
-// first boolean represents whether or not the attacking piece will be
-// captured as a result of the attack; the second whether the defending
-// piece will be captured.
 let captures = (a, b) =>
   switch (a, b) {
   | (Mine, Bomb) => (false, true)
@@ -100,30 +104,48 @@ let captures = (a, b) =>
   | (_, _) => (false, rank(a) > rank(b))
   }
 
-// Returns the set of board indices that the tile given by the index can
-// move to in the given direction. This only considers board boundaries
-// and not the tile contents themselves.
-let path = (index, kind, dir) =>
-  switch (coords(index), kind, dir) {
-  | ((_, 0), _, N) => []
-  | ((9, _), _, E) => []
-  | ((_, 9), _, S) => []
-  | ((0, _), _, W) => []
-  | ((_, y), Scot, N) => Array.map(Array.range(1, y), x => index - x * 10)
-  | ((x, _), Scot, E) => Array.map(Array.range(1, x - 1), x => index + x)
-  | ((_, y), Scot, S) => Array.map(Array.range(1, 9 - y), x => index + x * 10)
-  | ((x, _), Scot, W) => Array.map(Array.range(1, x), x => index - x)
-  | (_, _, N) => [index - 10]
-  | (_, _, E) => [index + 1]
-  | (_, _, S) => [index + 10]
-  | (_, _, W) => [index - 1]
+let validStart = (s, (x, y)) =>
+  x >= 0 &&
+  x <= 9 &&
+  switch s {
+  | Red => y < 10 && y > 5
+  | Blue => y < 4 && y > 0
   }
 
-// Returns the result of moving the tile `a` to the tile `b` as a two-element
-// tuple of booleans. The first boolean is true if the moving tile `a` can
-// legally move into the space occupied by `b`. The second boolean is true
-// if the piece can continue moving in that direction or if it should stop
-// there altogether.
+let offset = dir =>
+  switch dir {
+  | N => -10
+  | E => 1
+  | S => 10
+  | W => -1
+  }
+
+let path = (start, kind, dir) =>
+  switch (coords(start), kind, dir) {
+  | ((_, 0), _, N) => list{}
+  | ((9, _), _, E) => list{}
+  | ((_, 9), _, S) => list{}
+  | ((0, _), _, W) => list{}
+  | ((x, y), Scot, _) => {
+      let (backwards, end) = {
+        switch dir {
+        | N => (S, index((x, 0)))
+        | E => (W, index((9, y)))
+        | S => (N, index((x, 9)))
+        | W => (E, index((0, y)))
+        }
+      }
+
+      let rec step = (xs, current) => {
+        current == start ? xs : step(list{current, ...xs}, current + offset(backwards))
+      }
+
+      step(list{}, end)
+    }
+
+  | _ => list{start + offset(dir)}
+  }
+
 let walk = (a, b) =>
   switch (a, b) {
   | (Army(h, _), Army(k, _)) => (h !== k, false)
@@ -131,73 +153,110 @@ let walk = (a, b) =>
   | (_, _) => (false, false)
   }
 
-// Returns the set of all legal positions in the board that the tile found
-// at the given index can perform. The returned positions are represented
-// by the board index.
-let moves = (board, index) =>
+let moves = (board, index) => {
   switch board[index] {
-  | Some(Army(_, Bomb)) => []
-  | Some(Army(_, Flag)) => []
+  | None => Set.Int.empty
+  | Some(Land) => Set.Int.empty
+  | Some(None) => Set.Int.empty
+  | Some(Army(_, Bomb)) => Set.Int.empty
+  | Some(Army(_, Flag)) => Set.Int.empty
   | Some(Army(side, kind)) => {
-      let dirs = [N, E, S, W]
-      let initial = ([], true)
-      flatMap(dirs, dir => {
-        let candidates = path(index, kind, dir)
-        let (valid, _) = Array.reduce(candidates, initial, ((result, continue), index) => {
-          if continue {
-            switch board[index] {
-            | Some(tile) =>
-              switch walk(Army(side, kind), tile) {
-              | (true, cont) => (Array.concat(result, [index]), cont)
-              | (false, _) => (result, false)
-              }
-            | None => (result, false)
+      let rec step = (rs, indexes) =>
+        switch indexes {
+        | list{} => rs
+        | list{hd, ...tl} =>
+          switch board[hd] {
+          | None => rs
+          | Some(tile) =>
+            switch walk(Army(side, kind), tile) {
+            | (true, true) => step(Set.Int.add(rs, hd), tl)
+            | (true, false) => Set.Int.add(rs, hd)
+            | (false, _) => rs
             }
-          } else {
-            (result, continue)
           }
-        })
+        }
 
-        valid
-      })
+      let rec hike = (rs, dirs) =>
+        switch dirs {
+        | list{} => rs
+        | list{hd, ...tl} => hike(step(rs, path(index, kind, hd)), tl)
+        }
+
+      hike(Set.Int.empty, list{N, E, S, W})
     }
-  | _ => []
+  }
+}
+
+let opposing = s =>
+  switch s {
+  | Red => Blue
+  | Blue => Red
   }
 
-type state = {
-  mode: mode,
-  turn: side,
-  tiles: array<tile>,
+let starting = ks => {
+  let rec recur = (xs, ks) => {
+    switch ks {
+    | list{} => xs
+    | list{hd, ...tl} => recur(conj(xs, repeat(hd, quantity(hd))), tl)
+    }
+  }
+
+  recur(list{}, ks)
 }
 
-let createNewState = _ => {
-  mode: Pending,
-  turn: Red,
-  tiles: Array.concatMany([
-    Array.make(40, Land),
-    Array.make(2, Land),
-    Array.make(2, None),
-    Array.make(2, Land),
-    Array.make(2, None),
-    Array.make(2, Land),
-    Array.make(2, Land),
-    Array.make(2, None),
-    Array.make(2, Land),
-    Array.make(2, None),
-    Array.make(2, Land),
-    Array.make(40, Land),
-  ]),
-}
+let terrain = Array.concatMany([
+  Array.make(40, Land),
+  Array.make(2, Land),
+  Array.make(2, None),
+  Array.make(2, Land),
+  Array.make(2, None),
+  Array.make(2, Land),
+  Array.make(2, Land),
+  Array.make(2, None),
+  Array.make(2, Land),
+  Array.make(2, None),
+  Array.make(2, Land),
+  Array.make(40, Land),
+])
 
-let newSet = s => {
-  let kinds = [Bomb, Mars, Genr, Crnl, Majr, Capt, Lieu, Serg, Mine, Scot, Spys, Flag]
-  flatMap(kinds, k => Array.make(quantity(k), Army(s, k)))
-}
+let kinds = list{Bomb, Mars, Genr, Crnl, Majr, Capt, Lieu, Serg, Mine, Scot, Spys, Flag}
 
-// Returns a new board with random piece positions.
-let newBoard = _ => {
-  let lts = [Land, Land, None, None, Land, Land, None, None, Land, Land]
-  let bts = Array.shuffle(newSet(Blue))
-  let rts = Array.shuffle(newSet(Red))
-  Array.concatMany([bts, lts, lts, rts])
-}
+type event =
+  | StartNew
+  | Set(kind, (int, int))
+
+type state =
+  | Invalid
+  | NotStarted
+  | Setup({tiles: array<tile>, side: side, yours: list<kind>, theirs: list<kind>})
+
+let resolve = (state, event) =>
+  switch (state, event) {
+  | (NotStarted, StartNew) =>
+    Setup({tiles: terrain, side: Red, yours: starting(kinds), theirs: starting(kinds)})
+
+  | (Setup({tiles, side, yours, theirs}), Set(kind, coord)) => {
+      let pos = index(coord)
+      switch tiles[pos] {
+      | None => state
+      | Some(None) => state
+      | Some(Army(s, _)) when s === opposing(side) => state
+      | Some(tile) =>
+        if validStart(side, coord) {
+          let remaining = switch tile {
+          | Army(_, replaced) => list{replaced, ...remove(yours, kind)}
+          | _ => remove(yours, kind)
+          }
+
+          let board = assoc(tiles, pos, Army(side, kind))
+          Setup({tiles: board, side: side, yours: remaining, theirs: theirs})
+        } else {
+          state
+        }
+      }
+    }
+
+  | (NotStarted, Set(_)) => state
+  | (Setup(_), StartNew) => state
+  | (Invalid, _) => state
+  }

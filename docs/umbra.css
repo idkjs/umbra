@@ -28,3 +28,27 @@ button {
 .controls button + button {
     margin-top: 4px;
 }
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(10, 64px);
+    grid-template-rows: repeat(10, 64px);
+    grid-gap: 2px;
+    margin: 1px 0;
+}
+
+.board > div,
+.pieces > div {
+    border: 1px solid #ddd;
+}
+
+.pieces {
+    display: grid;
+    grid-template-columns: repeat(10, 64px);
+    grid-template-rows: repeat(4, 32px);
+    grid-gap: 2px;
+}
+
+.board .allowed {
+    border-color: royalBlue;
+}
