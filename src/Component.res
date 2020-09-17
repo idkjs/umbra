@@ -8,6 +8,27 @@ let css = ts => Array.reduce(ts, "", (names, (name, pass)) =>
     }
   )
 
+let tileName = (t: State.tile) =>
+  switch t {
+  | None => "~"
+  | Land => ""
+  | Army(_, k) =>
+    switch k {
+    | Bomb => "Bomb"
+    | Mars => "Mars"
+    | Genr => "Genr"
+    | Crnl => "Crnl"
+    | Majr => "Majr"
+    | Capt => "Capt"
+    | Lieu => "Lieu"
+    | Serg => "Serg"
+    | Mine => "Mine"
+    | Scot => "Scot"
+    | Spys => "Spys"
+    | Flag => "Flag"
+    }
+  }
+
 let navigate = (path, _) => ReasonReactRouter.push("#" ++ path)
 
 module Link = {
@@ -54,34 +75,18 @@ module Home = {
                 setSelected(_ => None)
                 dispatch(Set(kind, coords))
               }}>
-            {switch tile {
-            | Land => React.string(" ")
-            | None => React.string("~")
-            | _ => React.string("T")
-            }}
+            {React.string(tileName(tile))}
           </div>
         })
 
-        let pieces = yours->List.toArray->Array.map(kind =>
-          <div onClick={_ => setSelected(_ => Some(kind))}>
-            {React.string(
-              switch kind {
-              | Bomb => "Bomb"
-              | Mars => "Mars"
-              | Genr => "Genr"
-              | Crnl => "Crnl"
-              | Majr => "Majr"
-              | Capt => "Capt"
-              | Lieu => "Lieu"
-              | Serg => "Serg"
-              | Mine => "Mine"
-              | Scot => "Scot"
-              | Spys => "Spys"
-              | Flag => "Flag"
-              },
-            )}
-          </div>
-        )
+        let pieces =
+          yours
+          ->List.toArray
+          ->Array.map(kind =>
+            <div onClick={_ => setSelected(_ => Some(kind))}>
+              {React.string(tileName(Army(side, kind)))}
+            </div>
+          )
 
         <div>
           <div className="board"> {React.array(board)} </div>
