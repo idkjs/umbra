@@ -29,6 +29,12 @@ let tileName = (t: State.tile) =>
     }
   }
 
+let renderSet = (ks, s, f) =>
+  ks
+  ->List.toArray
+  ->Array.map(k => <div onClick={_ => f(k)}> {React.string(tileName(Army(s, k)))} </div>)
+  ->React.array
+
 let navigate = (path, _) => ReasonReactRouter.push("#" ++ path)
 
 module Link = {
@@ -61,7 +67,7 @@ module Home = {
         <button onClick={_ => dispatch(StartNew)}> {React.string("Start new game")} </button>
       </div>
 
-    | Setup({tiles, side, yours}) => {
+    | Setup({tiles, side, yours, theirs}) => {
         let board = Array.mapWithIndex(tiles, (index, tile) => {
           let dest = State.coords(index)
           let allowed = State.validStart(side, dest)
@@ -83,23 +89,19 @@ module Home = {
             }
 
           let hints = !(selections == (None, None))
-          <div className={css([("allowed", hints && allowed)])} onClick={onSelectTile}>
-            {React.string(tileName(tile))}
-          </div>
+          let classNames = css([("tile", true), ("allowed", hints && allowed)])
+          <div className={classNames} onClick={onSelectTile}> {React.string(tileName(tile))} </div>
         })
 
-        let pieces =
-          yours
-          ->List.toArray
-          ->Array.map(kind =>
-            <div onClick={_ => setS(_ => (Some(kind), None))}>
-              {React.string(tileName(Army(side, kind)))}
-            </div>
-          )
-
-        <div>
+        let onSelectKind = kind => setS(_ => (Some(kind), None))
+        <div className="layout">
+          <div className="pieces">
+            {renderSet(theirs, Blue, side === State.Blue ? onSelectKind : _ => ())}
+          </div>
           <div className="board"> {React.array(board)} </div>
-          <div className="pieces"> {React.array(pieces)} </div>
+          <div className="pieces">
+            {renderSet(yours, Red, side === State.Red ? onSelectKind : _ => ())}
+          </div>
         </div>
       }
     }
