@@ -223,7 +223,8 @@ let kinds = list{Bomb, Mars, Genr, Crnl, Majr, Capt, Lieu, Serg, Mine, Scot, Spy
 
 type event =
   | StartNew
-  | Set(kind, (int, int))
+  | Arrange(kind, (int, int))
+  | Rearrange((int, int), (int, int))
 
 type state =
   | Invalid
@@ -235,7 +236,7 @@ let resolve = (state, event) =>
   | (NotStarted, StartNew) =>
     Setup({tiles: terrain, side: Red, yours: starting(kinds), theirs: starting(kinds)})
 
-  | (Setup({tiles, side, yours, theirs}), Set(kind, coord)) => {
+  | (Setup({tiles, side, yours} as record), Arrange(kind, coord)) => {
       let pos = index(coord)
       switch tiles[pos] {
       | None => state
@@ -249,14 +250,32 @@ let resolve = (state, event) =>
           }
 
           let board = assoc(tiles, pos, Army(side, kind))
-          Setup({tiles: board, side: side, yours: remaining, theirs: theirs})
+          Setup({...record, tiles: board, yours: remaining})
         } else {
           state
         }
       }
     }
 
-  | (NotStarted, Set(_)) => state
-  | (Setup(_), StartNew) => state
-  | (Invalid, _) => state
+  | (Setup({tiles, side} as record), Rearrange(a, b)) => {
+      let pos = index(a)
+      switch tiles[pos] {
+      | None => state
+      | Some(None) => state
+      | Some(Army(s, _)) when s === opposing(side) => state
+      | Some(Army(_, _)) => {
+          let h = index(a)
+          let j = index(b)
+          let t = switch (tiles[h], tiles[j]) {
+          | (Some(at), Some(bt)) => tiles->assoc(h, bt)->assoc(j, at)
+          | _ => tiles
+          }
+
+          Setup({...record, tiles: t})
+        }
+      | _ => state
+      }
+    }
+
+  | _ => state
   }

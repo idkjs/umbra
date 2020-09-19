@@ -50,8 +50,8 @@ module Layout = {
 module Home = {
   @react.component
   let make = () => {
-    let (selected, setSelected) = React.useState(_ => None)
     let (state, dispatch) = Context.use()
+    let (selections, setS) = React.useState(_ => (None, None))
 
     switch state {
     | Invalid => <div> {React.string("Invalid state")} </div>
@@ -63,18 +63,27 @@ module Home = {
 
     | Setup({tiles, side, yours}) => {
         let board = Array.mapWithIndex(tiles, (index, tile) => {
-          let coords = State.coords(index)
-          let allowed = State.validStart(side, coords)
-          <div
-            className={css([("allowed", selected !== None && allowed)])}
-            onClick={_ =>
-              switch (allowed, selected) {
-              | (false, _) => ()
-              | (true, None) => ()
-              | (true, Some(kind)) =>
-                setSelected(_ => None)
-                dispatch(Set(kind, coords))
-              }}>
+          let dest = State.coords(index)
+          let allowed = State.validStart(side, dest)
+          let onSelectTile = _ =>
+            switch (allowed, tile, selections) {
+            | (true, _, (Some(kind), None)) => {
+                dispatch(Arrange(kind, dest))
+                setS(_ => (None, None))
+              }
+
+            | (true, _, (None, Some(from))) => {
+                dispatch(Rearrange(from, dest))
+                setS(_ => (None, None))
+              }
+
+            | (true, Army(_, _), (None, None)) => setS(_ => (None, Some(dest)))
+
+            | _ => ()
+            }
+
+          let hints = !(selections == (None, None))
+          <div className={css([("allowed", hints && allowed)])} onClick={onSelectTile}>
             {React.string(tileName(tile))}
           </div>
         })
@@ -83,7 +92,7 @@ module Home = {
           yours
           ->List.toArray
           ->Array.map(kind =>
-            <div onClick={_ => setSelected(_ => Some(kind))}>
+            <div onClick={_ => setS(_ => (Some(kind), None))}>
               {React.string(tileName(Army(side, kind)))}
             </div>
           )
