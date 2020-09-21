@@ -8,33 +8,6 @@ let css = ts => Array.reduce(ts, "", (names, (name, pass)) =>
     }
   )
 
-let tileName = (t: State.tile) =>
-  switch t {
-  | None => "~"
-  | Land => ""
-  | Army(_, k) =>
-    switch k {
-    | Bomb => "Bomb"
-    | Mars => "Mars"
-    | Genr => "Genr"
-    | Crnl => "Crnl"
-    | Majr => "Majr"
-    | Capt => "Capt"
-    | Lieu => "Lieu"
-    | Serg => "Serg"
-    | Mine => "Mine"
-    | Scot => "Scot"
-    | Spys => "Spys"
-    | Flag => "Flag"
-    }
-  }
-
-let renderSet = (ks, s, f) =>
-  ks
-  ->List.toArray
-  ->Array.map(k => <div onClick={_ => f(k)}> {React.string(tileName(Army(s, k)))} </div>)
-  ->React.array
-
 let navigate = (path, _) => ReasonReactRouter.push("#" ++ path)
 
 module Link = {
@@ -53,11 +26,55 @@ module Layout = {
   }
 }
 
+module Piece = {
+  @react.component
+  let make = (~player: Fealty.t, ~tile: Tile.t, ~onSelect=_ => (), ~hinting=false) => {
+    let classNames = switch tile {
+    | Field(_) => [("tile", true)]
+    | Corps(_) => [("tile", true)]
+    }
+
+    <div className={css(classNames)} onClick={_ => onSelect(tile)}>
+      {React.string(
+        switch tile {
+        | Field({terrain: None}) => "~"
+        | Field({terrain: Land}) => ""
+        | Corps({rank}) => string_of_int(Rank.strength(rank))
+        },
+      )}
+    </div>
+  }
+}
+
 module Home = {
+  type context =
+    | Camp
+    | Board((int, int))
+
   @react.component
   let make = () => {
     let (state, dispatch) = Context.use()
-    let (selections, setS) = React.useState(_ => (None, None))
+    let (selected: option<Tile.t>, setSelected) = React.useState(_ => None)
+
+    let onSelect = (selecting: Tile.t) =>
+      switch (selected, selecting) {
+      | (None, Corps(_)) => setSelected(_ => Some(selecting))
+      | (None, _) => ()
+      | (Some(selected), _) =>
+        switch (selected, selecting) {
+        | (Corps({rank, status: Camped}), Field({vector: dest}))
+        | (Corps({rank, status: Camped}), Corps({status: Marshalled(dest)})) =>
+          dispatch(Arrange(rank, dest))
+
+        | (Corps({status: Marshalled(src)}), Field({vector: dst}))
+        | (Corps({status: Marshalled(src)}), Corps({status: Marshalled(dst)})) =>
+          dispatch(Rearrange(src, dst))
+
+        | _ => ()
+        }
+
+        setSelected(_ => None)
+      }
 
     switch state {
     | Invalid => <div> {React.string("Invalid state")} </div>
@@ -67,41 +84,23 @@ module Home = {
         <button onClick={_ => dispatch(StartNew)}> {React.string("Start new game")} </button>
       </div>
 
-    | Setup({tiles, side, yours, theirs}) => {
-        let board = Array.mapWithIndex(tiles, (index, tile) => {
-          let dest = State.coords(index)
-          let allowed = State.validStart(side, dest)
-          let onSelectTile = _ =>
-            switch (allowed, tile, selections) {
-            | (true, _, (Some(kind), None)) => {
-                dispatch(Arrange(kind, dest))
-                setS(_ => (None, None))
-              }
+    | Setup({board, fealty: player, yours, theirs}) => {
+        let tiles = board->Array.map(tile => <Piece player tile onSelect />)
 
-            | (true, _, (None, Some(from))) => {
-                dispatch(Rearrange(from, dest))
-                setS(_ => (None, None))
-              }
-
-            | (true, Army(_, _), (None, None)) => setS(_ => (None, Some(dest)))
-
-            | _ => ()
-            }
-
-          let hints = !(selections == (None, None))
-          let classNames = css([("tile", true), ("allowed", hints && allowed)])
-          <div className={classNames} onClick={onSelectTile}> {React.string(tileName(tile))} </div>
+        let friendly = yours->List.toArray->Array.map(rank => {
+          let tile = Tile.Corps({rank: rank, fealty: player, status: Camped})
+          <Piece player tile onSelect />
         })
 
-        let onSelectKind = kind => setS(_ => (Some(kind), None))
+        let opponent = theirs->List.toArray->Array.map(rank => {
+          let tile = Tile.Corps({rank: rank, fealty: player, status: Camped})
+          <Piece player tile onSelect />
+        })
+
         <div className="layout">
-          <div className="pieces">
-            {renderSet(theirs, Blue, side === State.Blue ? onSelectKind : _ => ())}
-          </div>
-          <div className="board"> {React.array(board)} </div>
-          <div className="pieces">
-            {renderSet(yours, Red, side === State.Red ? onSelectKind : _ => ())}
-          </div>
+          <div className="pieces"> {React.array(player == Fealty.Blue ? friendly : opponent)} </div>
+          <div className="board"> {React.array(tiles)} </div>
+          <div className="pieces"> {React.array(player == Fealty.Red ? friendly : opponent)} </div>
         </div>
       }
     }
