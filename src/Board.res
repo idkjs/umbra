@@ -130,5 +130,5 @@ let isStartingTile = (fealty: Fealty.t, (x, y)) =>
   x <= 9 &&
   switch fealty {
   | Red => y < 10 && y > 5
-  | Blue => y < 4 && y > 0
+  | Blue => y < 4 && y >= 0
   }
