@@ -12,45 +12,94 @@ let navigate = (path, _) => ReasonReactRouter.push("#" ++ path)
 
 module Link = {
   @react.component
-  let make = (~children, ~path) => {
-    <a href="#" onClick={navigate(path)}> {children} </a>
-  }
-}
-
-module Layout = {
-  @react.component
-  let make = (~children) => {
-    <main>
-      <h1 className="title"> <Link path="/"> {React.string("Umbra")} </Link> </h1> {children}
-    </main>
+  let make = (~children, ~path, ~className="") => {
+    <a href="#" className={className} onClick={navigate(path)}> {children} </a>
   }
 }
 
 module Piece = {
-  @react.component
-  let make = (~player: Fealty.t, ~tile: Tile.t, ~onSelect=_ => (), ~hinting=false) => {
-    let classNames = switch tile {
-    | Field(_) => [("tile", true)]
-    | Corps(_) => [("tile", true)]
+  let fealtyName = (fealty: Fealty.t) =>
+    switch fealty {
+    | Red => "red"
+    | Blue => "blue"
     }
 
-    <div className={css(classNames)} onClick={_ => onSelect(tile)}>
+  let statusName = (tile: Tile.status) =>
+    switch tile {
+    | Camped => "camp"
+    | Marshalled(_) => "marshalled"
+    | Captured => "captured"
+    }
+
+  @react.component
+  let make = (~player: Fealty.t, ~tile: Tile.t, ~onSelect=_ => (), ~hinting=false) => {
+    let hidden = switch tile {
+    | Corps({status: Captured}) => false
+    | Corps({fealty}) => Fealty.opposes(player, fealty)
+    | _ => false
+    }
+
+    let classes = ["tile", "corps", "red", "blue", "hint", "hidden", "friendly"]
+
+    let classNames = Array.map(classes, name => {
+      switch (name, tile) {
+      | ("tile", _) => (name, true)
+      | ("corps", Corps(_)) => (name, true)
+      | ("red", Field({vector})) => (name, Board.isStartingTile(Red, vector))
+      | ("red", Corps({fealty: Red})) => (name, true)
+      | ("blue", Field({vector})) => (name, Board.isStartingTile(Blue, vector))
+      | ("blue", Corps({fealty: Blue})) => (name, true)
+      | ("hint", _) => (name, hinting)
+      | ("hidden", _) => (name, hidden)
+      | ("friendly", Corps({fealty})) => (name, !Fealty.opposes(player, fealty))
+      | _ => (name, false)
+      }
+    })
+
+    let selectable = switch tile {
+    | Field({terrain: Land, vector}) => Board.isStartingTile(player, vector)
+    | Corps({fealty}) => !Fealty.opposes(player, fealty)
+    | _ => false
+    }
+
+    <div className={css(classNames)} onClick={_ => selectable ? onSelect(tile) : ()}>
       {React.string(
         switch tile {
         | Field({terrain: None}) => "~"
         | Field({terrain: Land}) => ""
-        | Corps({rank}) => string_of_int(Rank.strength(rank))
+        | Corps({rank}) => hidden ? "?" : string_of_int(Rank.strength(rank))
         },
       )}
     </div>
   }
 }
 
-module Home = {
-  type context =
-    | Camp
-    | Board((int, int))
+module Panel = {
+  @react.component
+  let make = () => {
+    let (state, dispatch) = Context.use()
+    <div>
+      <header>
+        <h1 className="title"> {React.string("umbra")} </h1>
+        <p> {React.string("the classic game of battlefield strategy")} </p>
+      </header>
+      <section className="ns-section">
+        <h2> {React.string("Start new game")} </h2>
+        <button className="swatch-800" onClick={_ => dispatch(StartNew(Red))}>
+          {React.string("Red")}
+        </button>
+        <button className="swatch-800" onClick={_ => dispatch(StartNew(Blue))}>
+          {React.string("Blue")}
+        </button>
+      </section>
+      <section>
+        <button onClick={_ => dispatch(Shuffle)}> {React.string("Shuffle")} </button>
+      </section>
+    </div>
+  }
+}
 
+module Board = {
   @react.component
   let make = () => {
     let (state, dispatch) = Context.use()
@@ -77,51 +126,48 @@ module Home = {
       }
 
     switch state {
-    | Invalid => <div> {React.string("Invalid state")} </div>
+    | Setup({board, fealty: player, yours, theirs}) =>
+      let tiles = board->Array.map(tile =>
+        <Piece
+          player
+          tile
+          onSelect
+          hinting={switch (selected, tile) {
+          | (Some(Corps(_)), Field({vector})) => Board.isStartingTile(player, vector)
+          | (Some(Corps({fealty: a})), Corps({fealty: b})) => !Fealty.opposes(a, b)
+          | _ => false
+          }}
+        />
+      )
 
-    | NotStarted =>
-      <div className="controls">
-        <button onClick={_ => dispatch(StartNew)}> {React.string("Start new game")} </button>
+      let friendly = yours->List.toArray->Array.map(rank => {
+        let tile = Tile.Corps({rank: rank, fealty: player, status: Camped})
+        <Piece player tile onSelect hinting={true} />
+      })
+
+      let opponent = theirs->List.toArray->Array.map(rank => {
+        let tile = Tile.Corps({rank: rank, fealty: Fealty.opposing(player), status: Camped})
+        <Piece player tile onSelect />
+      })
+
+      <div>
+        <div className="pieces"> {React.array(player == Fealty.Blue ? friendly : opponent)} </div>
+        <div className="board"> {React.array(tiles)} </div>
+        <div className="pieces"> {React.array(player == Fealty.Red ? friendly : opponent)} </div>
       </div>
 
-    | Setup({board, fealty: player, yours, theirs}) => {
-        let tiles = board->Array.map(tile => <Piece player tile onSelect />)
-
-        let friendly = yours->List.toArray->Array.map(rank => {
-          let tile = Tile.Corps({rank: rank, fealty: player, status: Camped})
-          <Piece player tile onSelect />
-        })
-
-        let opponent = theirs->List.toArray->Array.map(rank => {
-          let tile = Tile.Corps({rank: rank, fealty: player, status: Camped})
-          <Piece player tile onSelect />
-        })
-
-        <div className="layout">
-          <div className="pieces"> {React.array(player == Fealty.Blue ? friendly : opponent)} </div>
-          <div className="board"> {React.array(tiles)} </div>
-          <div className="pieces"> {React.array(player == Fealty.Red ? friendly : opponent)} </div>
-        </div>
-      }
+    | _ => <div />
     }
   }
 }
 
-module NotFound = {
+module Layout = {
   @react.component
   let make = () => {
-    <div> {React.string("Page not found.")} </div>
-  }
-}
-
-module Router = {
-  @react.component
-  let make = () => {
-    let url = ReasonReactRouter.useUrl()
-    switch Js.String.split("/", url.hash) {
-    | [""] => <Home />
-    | _ => <NotFound />
-    }
+    <div className="ns-layout">
+      <div className="ns-layout-panel"> <Panel /> </div>
+      <div className="ns-layout-board"> <Board /> </div>
+    </div>
   }
 }
 
@@ -135,8 +181,6 @@ module Root = {
   @react.component
   let make = () => {
     let (state, dispatch) = React.useReducer(State.resolve, State.NotStarted)
-    <Context.Provider value={(state, thunk(dispatch))}>
-      <Layout> <Router /> </Layout>
-    </Context.Provider>
+    <Context.Provider value={(state, thunk(dispatch))}> <Layout /> </Context.Provider>
   }
 }

@@ -1,5 +1,4 @@
 open Belt
-open Utils
 
 type t = array<Tile.t>
 
@@ -75,8 +74,8 @@ let path = (src, rank: Rank.t, card) =>
   | _ => list{src + offset(card)}
   }
 
-let moves = (board, index) => {
-  switch (board[index]: option<Tile.t>) {
+let moves = (board: t, index) => {
+  switch board[index] {
   | None => Set.Int.empty
   | Some(Field(_)) | Some(Corps({rank: Bomb})) | Some(Corps({rank: Flag})) => Set.Int.empty
   | Some(Corps({rank}) as src) => {
