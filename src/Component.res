@@ -64,9 +64,9 @@ module Piece = {
 
 module Control = {
   @react.component
-  let make = (~children, ~event: State.event, ~enabled: State.t => bool) => {
-    let (state, dispatch) = Context.use()
-    <button disabled={!enabled(state)} onClick={_ => dispatch(event)}> {children} </button>
+  let make = (~children, ~event: State.event, ~enabled: bool) => {
+    let (_, dispatch) = Context.use()
+    <button disabled={!enabled} onClick={_ => dispatch(event)}> {children} </button>
   }
 }
 
@@ -74,6 +74,12 @@ module Panel = {
   @react.component
   let make = () => {
     let (state, dispatch) = Context.use()
+
+    let camp = switch state {
+    | Setup({fealty, camps}) | Playing({fealty, camps}) => Camps.get(camps, fealty)
+    | _ => list{}
+    }
+
     <>
       <header>
         <h1 className="title"> {React.string("umbra")} </h1>
@@ -83,59 +89,48 @@ module Panel = {
         <h2> {React.string("Start")} </h2>
         <Control
           event={StartNew(Blue)}
-          enabled={state =>
-            switch state {
-            | NotStarted => true
-            | _ => false
-            }}>
+          enabled={switch state {
+          | NotStarted => true
+          | _ => false
+          }}>
           {React.string("Blue")}
         </Control>
         <Control
           event={StartNew(Red)}
-          enabled={state =>
-            switch state {
-            | NotStarted => true
-            | _ => false
-            }}>
+          enabled={switch state {
+          | NotStarted => true
+          | _ => false
+          }}>
           {React.string("Red")}
         </Control>
       </section>
       <section className="ns-section">
         <h2> {React.string("Setup")} </h2>
-        <Control
-          event={Shuffle}
-          enabled={state =>
-            switch state {
-            | Setup({yours}) => List.some(yours, _ => true)
-            | _ => false
-            }}>
+        <Control event={Shuffle} enabled={List.some(camp, _ => true)}>
           {React.string("Shuffle")}
         </Control>
         <Control
           event={Reset}
-          enabled={state =>
-            switch state {
-            | Setup(_) => true
-            | _ => false
-            }}>
+          enabled={switch state {
+          | Setup(_) => true
+          | _ => false
+          }}>
           {React.string("Reset")}
         </Control>
         <Control
           event={Start}
-          enabled={state =>
-            switch state {
-            | Setup({yours}) => !List.some(yours, _ => true)
-            | _ => false
-            }}>
+          enabled={switch state {
+          | Setup(_) => !List.some(camp, _ => true)
+          | _ => false
+          }}>
           {React.string("Begin")}
         </Control>
         <Control
           event={Quit}
-          enabled={state =>
-            switch state {
-            | Setup(_) => true
-            | _ => false
-            }}>
+          enabled={switch state {
+          | Setup(_) => true
+          | _ => false
+          }}>
           {React.string("Quit")}
         </Control>
       </section>
@@ -143,20 +138,18 @@ module Panel = {
         <h2> {React.string("Play")} </h2>
         <Control
           event={Shuffle}
-          enabled={state =>
-            switch state {
-            | Playing(_) => true
-            | _ => false
-            }}>
+          enabled={switch state {
+          | Playing(_) => true
+          | _ => false
+          }}>
           {React.string("Forfeit")}
         </Control>
         <Control
           event={Shuffle}
-          enabled={state =>
-            switch state {
-            | Playing(_) => true
-            | _ => false
-            }}>
+          enabled={switch state {
+          | Playing(_) => true
+          | _ => false
+          }}>
           {React.string("Skip")}
         </Control>
       </section>
@@ -170,22 +163,20 @@ module Board = {
     let (state, dispatch) = Context.use()
 
     switch state {
-    | Setup({board, fealty: player, yours, theirs}) =>
-      let tiles = board->Array.map(tile => <Piece tile />)
-
-      let friendly = yours->List.toArray->Array.map(rank => {
-        let tile = Tile.Corps({rank: rank, fealty: player, status: Camped})
-        <Piece tile />
+    | Setup({board, fealty: player, camps}) | Playing({board, fealty: player, camps}) =>
+      let yours = Camps.get(camps, player)
+      let friendly = Array.map(List.toArray(yours), rank => {
+        <Piece tile={Corps({rank: rank, fealty: player, status: Camped})} />
       })
 
-      let opponent = theirs->List.toArray->Array.map(rank => {
-        let tile = Tile.Corps({rank: rank, fealty: Fealty.opposing(player), status: Camped})
-        <Piece tile />
+      let theirs = Camps.get(camps, Fealty.opposing(player))
+      let opponent = Array.map(List.toArray(theirs), rank => {
+        <Piece tile={Corps({rank: rank, fealty: Fealty.opposing(player), status: Camped})} />
       })
 
       <div>
         <div className="pieces"> {React.array(player == Fealty.Blue ? friendly : opponent)} </div>
-        <div className="board"> {React.array(tiles)} </div>
+        <div className="board"> {React.array(Array.map(board, tile => <Piece tile />))} </div>
         <div className="pieces"> {React.array(player == Fealty.Red ? friendly : opponent)} </div>
       </div>
 

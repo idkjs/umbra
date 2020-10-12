@@ -4,17 +4,15 @@ open Utils
 type setup = {
   board: Board.t,
   fealty: Fealty.t,
+  camps: Camps.t,
   selected: option<Tile.t>,
-  yours: list<Rank.t>,
-  theirs: list<Rank.t>,
 }
 
 type playing = {
   board: Board.t,
   fealty: Fealty.t,
+  camps: Camps.t,
   turn: Fealty.t,
-  yours: list<Rank.t>,
-  theirs: list<Rank.t>,
 }
 
 type t =
@@ -30,37 +28,42 @@ type event =
   | Start
   | Quit
 
-// Returns a new Setup(...) that updates the selection state, arranges camped
-// tiles onto the board, and re-arranges tiles that are already marshalled.
-let arrange = ({board, fealty: player, selected, yours} as state: setup, tile: Tile.t) => {
+// Returns a new state that updates the selection state, arranges camped tiles
+// onto the board, and re-arranges tiles that are already marshalled.
+let arrange = ({board, fealty: player, selected, camps} as state: setup, tile: Tile.t) => {
+  let update = Camps.update(camps, player)
+
   switch (selected, tile) {
-  | (_, Corps({fealty})) when Fealty.opposes(player, fealty) => Setup({...state, selected: None})
-  | (_, Field({vector})) when !Board.inBounds(player, vector) => Setup({...state, selected: None})
-  | (_, Corps({status: Camped})) => Setup({...state, selected: Some(tile)})
-  | (None, Corps(_)) => Setup({...state, selected: Some(tile)})
+  | (_, Corps({fealty})) when Fealty.opposes(player, fealty) => {...state, selected: None}
+  | (_, Field({vector})) when !Board.inBounds(player, vector) => {...state, selected: None}
+  | (_, Corps({status: Camped})) => {...state, selected: Some(tile)}
+  | (None, Corps(_)) => {...state, selected: Some(tile)}
 
   | (Some(Corps({rank, status: Camped})), Field({terrain: Land, vector})) =>
     let status: Tile.status = Marshalled(vector)
     let tile: Tile.t = Corps({rank: rank, fealty: player, status: status})
     let board = Board.set(board, vector, tile)
-    Setup({...state, board: board, selected: None, yours: remove(yours, rank)})
+    {...state, board: board, selected: None, camps: update(camp => remove(camp, rank))}
 
-  | (Some(Corps({rank, status: Camped})), Corps({rank: replaced, status: Marshalled(vector)})) =>
+  | (Some(Corps({rank, status: Camped})), Corps({rank: r, status: Marshalled(vector)})) =>
     let status: Tile.status = Marshalled(vector)
     let tile: Tile.t = Corps({rank: rank, fealty: player, status: status})
     let board = Board.set(board, vector, tile)
-    Setup({...state, board: board, selected: None, yours: list{replaced, ...remove(yours, rank)}})
+    {...state, board: board, selected: None, camps: update(camp => list{r, ...remove(camp, rank)})}
 
   | (Some(Corps({status: Marshalled(src)})), Corps({status: Marshalled(dst)}))
   | (Some(Corps({status: Marshalled(src)})), Field({terrain: Land, vector: dst})) =>
-    Setup({...state, board: Board.swap(board, src, dst), selected: None})
+    let board = Board.swap(board, src, dst)
+    {...state, board: board, selected: None}
 
-  | _ => Setup({...state, selected: None})
+  | _ => {...state, selected: None}
   }
 }
 
-// Returns a new Setup(...) with any arranged tiles returned to camp.
-let reset = ({board, fealty} as state: setup) => {
+// Returns a new state with any arranged tiles returned to camp.
+let reset = ({board, fealty, camps} as state: setup) => {
+  let update = Camps.update(camps, fealty)
+
   let rec reset = (board: Board.t, indices: list<int>) =>
     switch indices {
     | list{} => board
@@ -76,12 +79,14 @@ let reset = ({board, fealty} as state: setup) => {
 
   let indices = fealty->Board.indices->List.fromArray
   let updated = reset(Array.copy(board), indices)
-  Setup({...state, board: updated, yours: Rank.starting})
+  {...state, board: updated, camps: update(_ => Rank.starting)}
 }
 
-// Returns a new Setup(...) that randomly arranges all remaining camped tiles
-// on the board.
-let shuffle = ({board, fealty, yours} as state: setup) => {
+// Returns a new state that randomly arranges all remaining camped tiles on the
+// board.
+let shuffle = ({board, camps} as state: setup, fealty: Fealty.t) => {
+  let update = Camps.update(camps, fealty)
+
   let rec occupy = (board: Board.t, indexes, ranks) =>
     switch indexes {
     | list{} => board
@@ -101,26 +106,27 @@ let shuffle = ({board, fealty, yours} as state: setup) => {
     }
 
   let shuffled = fealty->Board.indices->Array.shuffle->List.fromArray
-  let updated = occupy(Array.copy(board), shuffled, yours)
-  Setup({...state, board: updated, yours: list{}})
+  let updated = occupy(Array.copy(board), shuffled, Camps.get(camps, fealty))
+  {...state, board: updated, camps: update(_ => list{})}
 }
 
 let initialSetup = {
   board: Board.empty,
   fealty: Fealty.Red,
   selected: None,
-  yours: Rank.starting,
-  theirs: Rank.starting,
+  camps: Camps.initial,
 }
 
 let resolve = (state, event) =>
   switch (state, event) {
   | (NotStarted, StartNew(fealty)) => Setup({...initialSetup, fealty: fealty})
-  | (Setup(record), Select(tile)) => arrange(record, tile)
-  | (Setup(record), Shuffle) => shuffle(record)
-  | (Setup(record), Reset) => reset(record)
+  | (Setup(record), Select(tile)) => Setup(arrange(record, tile))
+  | (Setup({fealty} as record), Shuffle) => Setup(shuffle(record, fealty))
+  | (Setup(record), Reset) => Setup(reset(record))
   | (Setup(_), Quit) => NotStarted
-  | (Setup({board, fealty}), Start) =>
-    Playing({board: board, fealty: fealty, turn: Fealty.Red, yours: list{}, theirs: list{}})
+  | (Setup({fealty} as record), Start) =>
+    let result = shuffle(record, Fealty.opposing(fealty))
+    Playing({board: result.board, fealty: fealty, turn: Fealty.Red, camps: Camps.empty})
+
   | (_, _) => state
   }
