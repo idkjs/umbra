@@ -165,22 +165,19 @@ a:link, a:visited {
 
 .tile.hint {
     cursor: pointer;
+    border-style: dashed;
+}
+
+.tile.hint:hover {
+    border-style: solid;
 }
 
 .tile.hint.red {
     border-color: #f44336;
 }
 
-.tile.hint.red:hover {
-    background-color: #e91e63;
-}
-
 .tile.hint.blue {
     border-color: #2196f3;
-}
-
-.tile.hint.blue:hover {
-    background-color: #03a9f4;
 }
 
 .tile.none {

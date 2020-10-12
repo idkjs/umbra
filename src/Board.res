@@ -130,7 +130,7 @@ let indices = (fealty: Fealty.t) =>
 
 let empty = Array.range(0, 99)->Array.map(initial)
 
-let isStartingTile = (fealty: Fealty.t, (x, y)) =>
+let inBounds = (fealty: Fealty.t, (x, y)) =>
   x >= 0 &&
   x <= 9 &&
   switch fealty {

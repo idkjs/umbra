@@ -4,6 +4,7 @@ open Utils
 type setup = {
   board: Board.t,
   fealty: Fealty.t,
+  selected: option<Tile.t>,
   yours: list<Rank.t>,
   theirs: list<Rank.t>,
 }
@@ -23,46 +24,40 @@ type t =
 
 type event =
   | StartNew(Fealty.t)
-  | Arrange(Rank.t, Vector.t)
-  | Rearrange(Vector.t, Vector.t)
+  | Select(Tile.t)
   | Reset
   | Shuffle
   | Start
   | Quit
 
-// Returns a new Setup(...) with the given `rank` placed on the board at the
-// position given by `coords`.
-let arrange = ({board, fealty, yours} as state: setup, rank, coords) =>
-  switch board[Board.idx(coords)] {
-  | None => Setup(state)
-  | Some(_) when !Board.isStartingTile(fealty, coords) => Setup(state)
-  | Some(Field({terrain: None})) => Setup(state)
-  | Some(Field(_)) =>
-    let status: Tile.status = Marshalled(coords)
-    let tile: Tile.t = Corps({rank: rank, fealty: fealty, status: status})
-    Setup({...state, yours: remove(yours, rank), board: Board.set(board, coords, tile)})
+// Returns a new Setup(...) that updates the selection state, arranges camped
+// tiles onto the board, and re-arranges tiles that are already marshalled.
+let arrange = ({board, fealty: player, selected, yours} as state: setup, tile: Tile.t) => {
+  switch (selected, tile) {
+  | (_, Corps({fealty})) when Fealty.opposes(player, fealty) => Setup({...state, selected: None})
+  | (_, Field({vector})) when !Board.inBounds(player, vector) => Setup({...state, selected: None})
+  | (_, Corps({status: Camped})) => Setup({...state, selected: Some(tile)})
+  | (None, Corps(_)) => Setup({...state, selected: Some(tile)})
 
-  | Some(Corps({rank: replaced})) =>
-    let status: Tile.status = Marshalled(coords)
-    let tile: Tile.t = Corps({rank: rank, fealty: fealty, status: status})
-    Setup({
-      ...state,
-      yours: list{replaced, ...remove(yours, rank)},
-      board: Board.set(board, coords, tile),
-    })
-  }
+  | (Some(Corps({rank, status: Camped})), Field({terrain: Land, vector})) =>
+    let status: Tile.status = Marshalled(vector)
+    let tile: Tile.t = Corps({rank: rank, fealty: player, status: status})
+    let board = Board.set(board, vector, tile)
+    Setup({...state, board: board, selected: None, yours: remove(yours, rank)})
 
-// Returns a new Setup(...) with the tiles at `src` and `dst` swapped.
-let rearrange = ({board, fealty, yours} as state: setup, src, dst) =>
-  switch (board[Board.idx(src)], board[Board.idx(dst)]) {
-  | (Some(a), Some(b)) when Board.isStartingTile(fealty, dst) =>
-    switch (a, b) {
-    | (_, Field({terrain: None})) => Setup(state)
-    | (Corps({fealty: h}), Corps({fealty: k})) when Fealty.opposes(h, k) => Setup(state)
-    | (_, _) => Setup({...state, board: Board.swap(board, src, dst)})
-    }
-  | _ => Setup(state)
+  | (Some(Corps({rank, status: Camped})), Corps({rank: replaced, status: Marshalled(vector)})) =>
+    let status: Tile.status = Marshalled(vector)
+    let tile: Tile.t = Corps({rank: rank, fealty: player, status: status})
+    let board = Board.set(board, vector, tile)
+    Setup({...state, board: board, selected: None, yours: list{replaced, ...remove(yours, rank)}})
+
+  | (Some(Corps({status: Marshalled(src)})), Corps({status: Marshalled(dst)}))
+  | (Some(Corps({status: Marshalled(src)})), Field({terrain: Land, vector: dst})) =>
+    Setup({...state, board: Board.swap(board, src, dst), selected: None})
+
+  | _ => Setup({...state, selected: None})
   }
+}
 
 // Returns a new Setup(...) with any arranged tiles returned to camp.
 let reset = ({board, fealty} as state: setup) => {
@@ -110,12 +105,18 @@ let shuffle = ({board, fealty, yours} as state: setup) => {
   Setup({...state, board: updated, yours: list{}})
 }
 
+let initialSetup = {
+  board: Board.empty,
+  fealty: Fealty.Red,
+  selected: None,
+  yours: Rank.starting,
+  theirs: Rank.starting,
+}
+
 let resolve = (state, event) =>
   switch (state, event) {
-  | (NotStarted, StartNew(fealty)) =>
-    Setup({board: Board.empty, fealty: fealty, yours: Rank.starting, theirs: Rank.starting})
-  | (Setup(record), Arrange(rank, dst)) => arrange(record, rank, dst)
-  | (Setup(record), Rearrange(src, dst)) => rearrange(record, src, dst)
+  | (NotStarted, StartNew(fealty)) => Setup({...initialSetup, fealty: fealty})
+  | (Setup(record), Select(tile)) => arrange(record, tile)
   | (Setup(record), Shuffle) => shuffle(record)
   | (Setup(record), Reset) => reset(record)
   | (Setup(_), Quit) => NotStarted
