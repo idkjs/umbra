@@ -12,6 +12,7 @@ type playing = {
   board: Board.t,
   fealty: Fealty.t,
   camps: Camps.t,
+  selected: option<Tile.t>,
   turn: Fealty.t,
 }
 
@@ -27,6 +28,11 @@ type event =
   | Shuffle
   | Start
   | Quit
+
+// Returns a new setup state with the given fealty as the player's chosen side.
+let create = fealty => {
+  {board: Board.empty, fealty: fealty, selected: None, camps: Camps.initial}
+}
 
 // Returns a new state that updates the selection state, arranges camped tiles
 // onto the board, and re-arranges tiles that are already marshalled.
@@ -60,28 +66,6 @@ let arrange = ({board, fealty: player, selected, camps} as state: setup, tile: T
   }
 }
 
-// Returns a new state with any arranged tiles returned to camp.
-let reset = ({board, fealty, camps} as state: setup) => {
-  let update = Camps.update(camps, fealty)
-
-  let rec reset = (board: Board.t, indices: list<int>) =>
-    switch indices {
-    | list{} => board
-    | list{index, ...indices} =>
-      switch board[index] {
-      | Some(_) => {
-          Belt.Array.setUnsafe(board, index, Field({terrain: Land, vector: Board.vec(index)}))
-          reset(board, indices)
-        }
-      | None => board
-      }
-    }
-
-  let indices = fealty->Board.indices->List.fromArray
-  let updated = reset(Array.copy(board), indices)
-  {...state, board: updated, camps: update(_ => Rank.starting)}
-}
-
 // Returns a new state that randomly arranges all remaining camped tiles on the
 // board.
 let shuffle = ({board, camps} as state: setup, fealty: Fealty.t) => {
@@ -110,23 +94,47 @@ let shuffle = ({board, camps} as state: setup, fealty: Fealty.t) => {
   {...state, board: updated, camps: update(_ => list{})}
 }
 
-let initialSetup = {
-  board: Board.empty,
-  fealty: Fealty.Red,
-  selected: None,
-  camps: Camps.initial,
+// Returns a new state with any arranged tiles returned to camp.
+let reset = ({board, fealty, camps} as state: setup) => {
+  let update = Camps.update(camps, fealty)
+
+  let rec reset = (board: Board.t, indices: list<int>) =>
+    switch indices {
+    | list{} => board
+    | list{index, ...indices} =>
+      switch board[index] {
+      | Some(_) => {
+          Belt.Array.setUnsafe(board, index, Field({terrain: Land, vector: Board.vec(index)}))
+          reset(board, indices)
+        }
+      | None => board
+      }
+    }
+
+  let indices = fealty->Board.indices->List.fromArray
+  let updated = reset(Array.copy(board), indices)
+  {...state, board: updated, camps: update(_ => Rank.starting)}
 }
+
+// Returns a new playing state with the opposing tiles randomly arranged on
+// the board.
+let start = ({fealty} as state: setup) => {
+  let shuffled = shuffle(state, Fealty.opposing(fealty))
+  {board: shuffled.board, fealty: fealty, camps: Camps.empty, selected: None, turn: Fealty.Red}
+}
+
+// Returns a new playing state with a modified `selected` state depending on
+// the given tile selection.
+let select = (state: playing, tile: Tile.t) => state
 
 let resolve = (state, event) =>
   switch (state, event) {
-  | (NotStarted, StartNew(fealty)) => Setup({...initialSetup, fealty: fealty})
-  | (Setup(record), Select(tile)) => Setup(arrange(record, tile))
-  | (Setup({fealty} as record), Shuffle) => Setup(shuffle(record, fealty))
-  | (Setup(record), Reset) => Setup(reset(record))
+  | (NotStarted, StartNew(fealty)) => Setup(create(fealty))
+  | (Setup(data), Select(tile)) => Setup(arrange(data, tile))
+  | (Setup({fealty} as data), Shuffle) => Setup(shuffle(data, fealty))
+  | (Setup(data), Reset) => Setup(reset(data))
   | (Setup(_), Quit) => NotStarted
-  | (Setup({fealty} as record), Start) =>
-    let result = shuffle(record, Fealty.opposing(fealty))
-    Playing({board: result.board, fealty: fealty, turn: Fealty.Red, camps: Camps.empty})
-
+  | (Setup(data), Start) => Playing(start(data))
+  | (Playing({selected: None} as data), Select(tile)) => Playing(select(data, tile))
   | (_, _) => state
   }
