@@ -74,28 +74,105 @@ module Piece = {
   }
 }
 
+module Control = {
+  @react.component
+  let make = (~children, ~event: State.event, ~enabled: State.t => bool) => {
+    let (state, dispatch) = Context.use()
+    <button disabled={!enabled(state)} onClick={_ => dispatch(event)}> {children} </button>
+  }
+}
+
 module Panel = {
   @react.component
   let make = () => {
     let (state, dispatch) = Context.use()
-    <div>
+    <>
       <header>
         <h1 className="title"> {React.string("umbra")} </h1>
         <p> {React.string("the classic game of battlefield strategy")} </p>
       </header>
       <section className="ns-section">
-        <h2> {React.string("Start new game")} </h2>
-        <button className="swatch-800" onClick={_ => dispatch(StartNew(Red))}>
-          {React.string("Red")}
-        </button>
-        <button className="swatch-800" onClick={_ => dispatch(StartNew(Blue))}>
+        <h2> {React.string("Start")} </h2>
+        <Control
+          event={StartNew(Blue)}
+          enabled={state =>
+            switch state {
+            | NotStarted => true
+            | _ => false
+            }}>
           {React.string("Blue")}
-        </button>
+        </Control>
+        <Control
+          event={StartNew(Red)}
+          enabled={state =>
+            switch state {
+            | NotStarted => true
+            | _ => false
+            }}>
+          {React.string("Red")}
+        </Control>
       </section>
-      <section>
-        <button onClick={_ => dispatch(Shuffle)}> {React.string("Shuffle")} </button>
+      <section className="ns-section">
+        <h2> {React.string("Setup")} </h2>
+        <Control
+          event={Shuffle}
+          enabled={state =>
+            switch state {
+            | Setup({yours}) => List.some(yours, _ => true)
+            | _ => false
+            }}>
+          {React.string("Shuffle")}
+        </Control>
+        <Control
+          event={Reset}
+          enabled={state =>
+            switch state {
+            | Setup(_) => true
+            | _ => false
+            }}>
+          {React.string("Reset")}
+        </Control>
+        <Control
+          event={Start}
+          enabled={state =>
+            switch state {
+            | Setup({yours}) => !List.some(yours, _ => true)
+            | _ => false
+            }}>
+          {React.string("Begin")}
+        </Control>
+        <Control
+          event={Quit}
+          enabled={state =>
+            switch state {
+            | Setup(_) => true
+            | _ => false
+            }}>
+          {React.string("Quit")}
+        </Control>
       </section>
-    </div>
+      <section className="ns-section">
+        <h2> {React.string("Play")} </h2>
+        <Control
+          event={Shuffle}
+          enabled={state =>
+            switch state {
+            | Playing(_) => true
+            | _ => false
+            }}>
+          {React.string("Forfeit")}
+        </Control>
+        <Control
+          event={Shuffle}
+          enabled={state =>
+            switch state {
+            | Playing(_) => true
+            | _ => false
+            }}>
+          {React.string("Skip")}
+        </Control>
+      </section>
+    </>
   }
 }
 
@@ -103,6 +180,7 @@ module Board = {
   @react.component
   let make = () => {
     let (state, dispatch) = Context.use()
+
     let (selected: option<Tile.t>, setSelected) = React.useState(_ => None)
 
     let onSelect = (selecting: Tile.t) =>

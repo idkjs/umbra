@@ -122,6 +122,12 @@ let initial = (index): Tile.t => {
   }
 }
 
+let indices = (fealty: Fealty.t) =>
+  switch fealty {
+  | Blue => Array.range(0, 39)
+  | Red => Array.range(60, 99)
+  }
+
 let empty = Array.range(0, 99)->Array.map(initial)
 
 let isStartingTile = (fealty: Fealty.t, (x, y)) =>

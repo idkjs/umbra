@@ -9,7 +9,7 @@
     "watch": "bsb -make-world -w",
     "clean": "bsb -clean-world",
     "server": "http-server docs/",
-    "start": "npm-run-all clean build --parallel server watch bundle"
+    "start": "npm-run-all clean build --parallel server bundle watch"
   },
   "author": "Samuel Ferrell <samcferrell@gmail.com>",
   "license": "MIT",
