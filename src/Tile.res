@@ -4,12 +4,12 @@ type terrain =
 
 type status =
   | Camped
-  | Marshalled(Vector.t)
+  | Marshalled
   | Captured
 
 type t =
-  | Field({terrain: terrain, vector: Vector.t})
-  | Corps({rank: Rank.t, fealty: Fealty.t, status: status})
+  | Field({vector: Vector.t, terrain: terrain})
+  | Corps({vector: Vector.t, rank: Rank.t, fealty: Fealty.t, status: status})
 
 let opposes = (atk, def) =>
   switch (atk, def) {
