@@ -8,7 +8,7 @@ let css = ts => Array.reduce(ts, "", (names, (name, pass)) =>
     }
   )
 
-let navigate = (path, _) => ReasonReactRouter.push("#" ++ path)
+let navigate = (path, _) => RescriptReactRouter.push("#" ++ path)
 
 module Link = {
   @react.component
