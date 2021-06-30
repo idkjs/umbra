@@ -1,4 +1,4 @@
-open Utils
+open Utils;
 
 type t =
   | Bomb
@@ -12,10 +12,10 @@ type t =
   | Mine
   | Scot
   | Spys
-  | Flag
+  | Flag;
 
 let quantity = rank =>
-  switch rank {
+  switch (rank) {
   | Bomb => 6
   | Mars => 1
   | Genr => 1
@@ -28,10 +28,10 @@ let quantity = rank =>
   | Scot => 8
   | Spys => 1
   | Flag => 1
-  }
+  };
 
 let strength = rank =>
-  switch rank {
+  switch (rank) {
   | Bomb => 11
   | Mars => 10
   | Genr => 9
@@ -44,20 +44,34 @@ let strength = rank =>
   | Scot => 2
   | Spys => 1
   | Flag => 0
-  }
+  };
 
-let starting = {
-  let ranks = list{Bomb, Mars, Genr, Crnl, Majr, Capt, Lieu, Serg, Mine, Scot, Spys, Flag}
+let starting =
+  [@ns.braces]
+  {
+    let ranks = [
+      Bomb,
+      Mars,
+      Genr,
+      Crnl,
+      Majr,
+      Capt,
+      Lieu,
+      Serg,
+      Mine,
+      Scot,
+      Spys,
+      Flag,
+    ];
 
-  let rec recur = (xs, ks) => {
-    switch ks {
-    | list{} => xs
-    | list{hd, ...tl} => recur(conj(xs, repeat(hd, quantity(hd))), tl)
-    }
-  }
+    let rec recur = (xs, ks) =>
+      switch (ks) {
+      | [] => xs
+      | [hd, ...tl] => recur(conj(xs, repeat(hd, quantity(hd))), tl)
+      };
 
-  recur(list{}, ranks)
-}
+    recur([], ranks);
+  };
 
 let captures = (atk, def) =>
   switch (atk, def) {
@@ -66,4 +80,4 @@ let captures = (atk, def) =>
   | (_, Bomb) => (true, false)
   | (h, k) when h == k => (true, true)
   | (_, _) => (false, strength(atk) > strength(def))
-  }
+  };

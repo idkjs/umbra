@@ -1,4 +1,4 @@
-@bs.val
+@val
 external addEventListener: (string, unit => unit) => unit = "window.addEventListener"
 
 let main = _ => {
